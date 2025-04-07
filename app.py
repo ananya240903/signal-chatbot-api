@@ -9,7 +9,7 @@ import os
 
 app = Flask(__name__)
 
-df = pd.read_csv("https://github.com/ananya240903/signal-chatbot-api/blob/main/signal_db3_augmented.csv")
+df = pd.read_csv("df = pd.read_csv("https://raw.githubusercontent.com/ananya240903/signal-chatbot-api/main/signal_db3_augmented.csv")")
 df.columns = df.columns.str.strip()
 
 # Encoding categorical data
