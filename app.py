@@ -7,6 +7,8 @@ from sklearn.preprocessing import LabelEncoder
 import re
 import os
 import logging
+import requests
+
 
 # Set up logging
 logging.basicConfig(
@@ -22,7 +24,7 @@ logger = logging.getLogger()
 app = Flask(__name__)
 
 # Corrected line:
-df = pd.read_csv("https://raw.githubusercontent.com/ananya240903/signal-chatbot-api/main/signal_db3_augmented.csv", on_bad_lines='skip')
+df = pd.read_csv("signal_db3_augmented.csv", on_bad_lines='skip')
 df.columns = df.columns.str.strip()
 
 # Encoding categorical data
@@ -57,6 +59,37 @@ def extract_sim_provider(text):
         if sim in text:
             return sim
     return None  # SIM provider not found in message
+
+def get_lat_lng_from_place(place_name):
+    try:
+        # Try full query first
+        full_query = f"{place_name}, Banasthali, Rajasthan, India"
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {"q": full_query, "format": "json", "limit": 1}
+        headers = {"User-Agent": "Mozilla/5.0 signal-location-bot/1.0"}
+        
+        response = requests.get(url, params=params, headers=headers)
+        logger.debug(f"Nominatim full query URL: {response.url}")
+        
+        if response.ok and response.json():
+            data = response.json()
+            return float(data[0]["lat"]), float(data[0]["lon"])
+        
+        # Fallback: try simpler location only
+        fallback_query = "Banasthali, Rajasthan, India"
+        logger.warning(f"No match for '{place_name}'. Retrying with fallback...")
+        response = requests.get(url, params={"q": fallback_query, "format": "json", "limit": 1}, headers=headers)
+        
+        if response.ok and response.json():
+            data = response.json()
+            return float(data[0]["lat"]), float(data[0]["lon"])
+
+    except Exception as e:
+        logger.error(f"Exception in geocoding '{place_name}': {e}")
+    
+    return 0.0, 0.0
+
+
 
 def build_google_maps_url(location_name):
     return f"https://www.google.com/maps/search/?api=1&query={location_name.replace(' ', '+')}"
@@ -113,10 +146,14 @@ def chatbot_handler():
 
         loc_name = location_mapping[loc_code]
         strength = round(row["Strength"], 2)
-        maps_url = build_google_maps_url(loc_name)
+        lat, lng = get_lat_lng_from_place(loc_name)
+        maps_url = f"https://www.google.com/maps?q={lat},{lng}"  # Better than search endpoint
+
         results.append({
             "location": loc_name,
             "avg_signal_strength": strength,
+            "latitude": lat,
+            "longitude": lng,
             "maps_url": maps_url
         })
 
@@ -127,9 +164,6 @@ def chatbot_handler():
         "sim": sim_query,
         "recommendations": results
     })
-
-
-
 
 
 @app.route('/predict', methods=['GET'])
